@@ -24,6 +24,25 @@
 - Cabin 컬럼: 전체 891개 값 중 687개의 결측치가 나왔다. 방 호수 데이터는 생존율과 큰 관계가 없다고 판단하여 삭제한다.
 - Embarked 컬럼: 결측치가 2개뿐이기 때문에 가장 많은 비율을 차지하는 'S'로 대체한다. (S: 644, C:168, Q:77)
 
+```
+input_train = ori_train.drop(['PassengerId', 'Name', 'Ticket', 'Cabin'], axis=1)
+input_train.isnull().sum()
+
+#age
+# 남녀 각각 평균 나이 계산
+mean_age_by_sex = input_train.groupby('Sex')['Age'].mean()
+
+print(mean_age_by_sex)
+
+# 성별(Sex)별 평균 나이 계산 후, 해당 그룹 평균으로 결측치 채우기
+input_train['Age'] = input_train.groupby('Sex')['Age'].transform(
+    lambda x: x.fillna(x.mean())
+)
+
+#embarked
+input_train['Embarked'].fillna(input_train['Embarked'].mode()[0], inplace=True)
+
+```
 
 ## 2️⃣ 데이터 인코딩
 
@@ -42,6 +61,25 @@
 - Label Encoding: Pclass, SibSp, Parch -> 순서가 있는 순서척도
 - One-Hot Encoding: Embarked, Sex -> 순서가 없는 명목척도
 
+```
+from sklearn.preprocessing import LabelEncoder
+
+# 1. 먼저 범주형 변수(Embarked, Sex) → 원-핫 인코딩
+input_processed = pd.get_dummies(input_scaled,
+                                 columns=['Embarked', 'Sex'],
+                                 drop_first=True)
+
+# 2. 라벨 인코딩할 컬럼 목록
+label_cols = ['Pclass', 'SibSp', 'Parch']
+
+# 3. 각 컬럼별 라벨 인코딩 적용
+le = LabelEncoder()
+for col in label_cols:
+    input_processed[col] = le.fit_transform(input_processed[col])
+
+# 결과 확인
+print(input_processed.head())
+```
 
 ## 3️⃣ 데이터 스케일링
 
@@ -58,7 +96,23 @@
 - Age: StandardScaler ; 나이는 연속형, 정규분포에 가까운 분포를 따른다. 모델(로지스틱 회귀, KNN 등)에서 분산이 큰 피처는 가중치가 왜곡되기 때문에 표준화를 한다.(gpt참고..) 큰 극단치가 없기 때문에 MinMaxScaler 대신 표준화로 선택하였다. 
 - Fare: RobustScaler ; 극단치(운임이 높은 승객)가 많아 표준화는 평균이 크게 왜곡될 수 있다. 따라서 이상치에 영향을 덜 받는 RobustScaler를 선택하였다. 
 - 다른 변수들은 범주형이므로 스케일링을 할 필요가 없다고 판단하였다. 
+```
+from sklearn.preprocessing import StandardScaler, RobustScaler
 
+# 1. 스케일러 객체 초기화
+scaler_age = StandardScaler()
+scaler_fare = RobustScaler()
+
+# 2. 훈련 데이터 복사본 생성
+input_scaled = input_train.copy()
+
+# 3. Age는 StandardScaler, Fare는 RobustScaler 적용
+input_scaled['Age'] = scaler_age.fit_transform(input_scaled[['Age']])
+input_scaled['Fare'] = scaler_fare.fit_transform(input_scaled[['Fare']])
+
+# 결과 확인
+print(input_scaled[['Age', 'Fare']].head())
+```
 
 ## 4️⃣ 데이터 왜도 (Skewness)
 
@@ -76,6 +130,15 @@
 - Age: 정규분포에 가깝다. 왜도 0.4~0.6 -> 왜도 처리 필요 없다.
 - Fare: 시각화 결과를 보아 극단치가 많이 존재한다. 왜도 4.5~5.0이상으로 매우 강한 양의 왜도를 보인다. 로그 변환을 해주어 차이를 줄이는 방법이 있다.
 - 범주형 변수는 왜도의 적용 대상이 아니다. 
+```
+# Age와 Fare의 왜도 계산
+age_skew = input_train['Age'].skew()
+fare_skew = input_train['Fare'].skew()
+
+print(f"Age 왜도: {age_skew:.4f}")
+print(f"Fare 왜도: {fare_skew:.4f}")
+```
+
 
 ## 5️⃣ 이상치 (Outliers)
 
